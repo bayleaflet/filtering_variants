@@ -1,5 +1,13 @@
 #!/bin/bash
 
+#SBATCH --account=utu
+#SBATCH --partition=lonepeak
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --time=4:00:00
+#SBATCH -o slurm-%j.out-%N
+#SBATCH -e slurm-%j.err-%N
+
 {
 usage="$(basename "$0") [-h] [-l <SRA_list>] [-g <reference_genome.fasta>] [-a <Frequency>] [-t <threads>]
 This program will call variants using freebayes in given SRA NGS sequences files to obtain major viral variants.
@@ -29,74 +37,75 @@ fi
 
 begin=`date +%s`
 
-#  echo "Downloading SRA files from the given list of accessions"
-#  prefetch --max-size 800G -O ./ --option-file ${l}
-#  echo "SRA files were downloaded in current directory"
-#  echo ""
-#  echo "Done"
-#  echo ""
-#  echo "Converting SRA files to fastq.gz"
-#  ls -p | grep SRR > sra_dirs
-#  while read i; do mv "$i"*.sralite .; done<sra_dirs
-#  SRA= ls -1 *.sralite
-#  for SRA in *.sralite; do fastq-dump --gzip ${SRA}
-#  done
-#   
+echo "Downloading SRA files from the given list of accessions"
+prefetch --max-size 800G -O ./ --option-file ${l}
+echo "SRA files were downloaded in current directory"
+echo ""
+echo "Done"
+echo ""
+echo "Converting SRA files to fastq.gz"
+ls -p | grep SRR > sra_dirs
+while read i; do mv "$i"*.sralite .; done<sra_dirs
+SRA= ls -1 *.sralite
+for SRA in *.sralite; do fastq-dump --gzip ${SRA}
+done
+  
 #   ##################################################################################
 #   # Trimming downloaded Illumina datasets with fastp, using 16 threads (-w option) #
 #   ##################################################################################
+   
+echo "Trimming downloaded Illumina datasets with fastp."
+echo ""
 #   
-#   echo "Trimming downloaded Illumina datasets with fastp."
-#   echo ""
-#   
-#   z= ls -1 *.fastq.gz
-#   for z in *.fastq.gz; do fastp -w ${t} -i ${z} -o ${z}.fastp
-#   gzip ${z}.fastp
-#   done
+z= ls -1 *.fastq.gz
+for z in *.fastq.gz; do fastp -w ${t} -i ${z} -o ${z}.fastp
+gzip ${z}.fastp
+done
 #   
 #   ######################
 #   # Indexing Reference #
 #   ######################
 #   
-#   echo "Indexing Reference"
-#   echo ""
-#   samtools faidx ${g}
-#   
+echo "Indexing Reference"
+echo ""
+samtools faidx ${g}
+ 
 #   ###########################################################################################
 #   # Aligning illumina datasets againts reference with minimap, using 20 threads (-t option) #
 #   ###########################################################################################
-# 
-# echo "Aligning illumina datasets againts reference with minimap, using n threads."
-# echo ""
-# b= ls -1 *.fastq.gz.fastp.gz
-# for b in *.fastq.gz.fastp.gz; do minimap2 -ax sr ${g} ${b} > ${b}.sam -t ${t}
-# samtools sort ${b}.sam > ${b}.sam.sorted.bam -@ ${t}
-# rm ${b}.sam
-# rm ${b}
-# done
+ 
+echo "Aligning illumina datasets againts reference with minimap, using n threads."
+echo ""
+b= ls -1 *.fastq.gz.fastp.gz
+for b in *.fastq.gz.fastp.gz; do minimap2 -ax sr ${g} ${b} > ${b}.sam -t ${t}
+samtools sort ${b}.sam > ${b}.sam.sorted.bam -@ ${t}
+rm ${b}.sam
+rm ${b}
+done
 # 
 # 
 # ######################
 # # Renaming BAM files #
 # ######################
 # 
-# echo "Renaming files in bash"
-# echo ""
-# for filename in *.bam; do mv "./$filename" "./$(echo "$filename" | sed -e 's/.fastq.gz.fastp.gz.sam.sorted//g')";  done
+echo "Renaming files in bash"
+echo ""
+for filename in *.bam; do mv "./$filename" "./$(echo "$filename" | sed -e 's/.fastq.gz.fastp.gz.sam.sorted//g')";  done
 # 
 # ######################
 # # Indexing BAM files #
 # ######################
 # 
-# echo "Indexing BAM files."
-# echo ""
+echo "Indexing BAM files."
+echo ""
 # 
-# f= ls -1 *.bam
-# for f in *.bam; do samtools index ${f}; done
+f= ls -1 *.bam
+for f in *.bam; do samtools index ${f}; done
 
 #################################################
 ### Performing Variant Calling with freebayes ###
 #################################################
+module load freebayes
 
 echo "Performing Variant Calling with freebayes:"
 echo ""
@@ -116,6 +125,7 @@ echo ""
 find . -size 0 -delete
 echo "Merge VCFs using jacquard"
 echo ""
+module load jacquard
 jacquard merge --include_all ./ merged.vcf
 
 
@@ -133,3 +143,5 @@ echo "$mdate | $mcpu | $mmem" >> ./stats-cpu
 #
 } | tee logfile
 #
+module unload freebayes
+module unload jacquard
